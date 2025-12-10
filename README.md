@@ -61,6 +61,59 @@ $ headless-ida /path/to/idat64 /path/to/binary -c "import idautils; print(list(i
 $ headless-ida /path/to/idat64 /path/to/binary -c "import IPython; IPython.embed();"
 ```
 
+### Remote Exec/Eval/Remoteify
+
+Referenced from https://github.com/justfoxing/jfx_bridge.
+
+```python
+def ida_remote_print_all_funcs():
+    import idautils # type: ignore
+    import ida_name # type: ignore
+    for func in idautils.Functions():
+        print(f"{hex(func)} {ida_name.get_ea_name(func)}")
+    pass
+
+
+def ida_remote_get_all_func_names():
+    import idautils # type: ignore
+    import ida_name # type: ignore
+    func_names = []
+    for func in idautils.Functions():
+        func_names.append(ida_name.get_ea_name(func))
+    return func_names
+
+headless_ida = HeadlessIda(ida_dir=ida_dir_path, binary_path=bin_path)
+
+print(headless_ida.remote_eval("1+1"))  # 2
+
+if remote_fn := headless_ida.remoteify(ida_remote_get_all_func_names):
+    all_funcs = remote_fn()
+    all_funcs = list(all_funcs)
+    print(all_funcs)
+    pass
+```
+
+### Support for multiple headless-ida instances
+
+In the original design, the server always bound to the default port 8000. With our updated approach, the system can intelligently allocate available ports, allowing multiple headless IDA instances to run concurrently.
+
+**However, this enhancement imposes a constraint: direct use of IDA APIs is no longer feasible. All interactions must be performed via `remoteify` or `remote_*` calls to prevent cross-instance conflicts.**
+
+```python
+headless_ida = HeadlessIda(ida_dir=ida_dir_path, binary_path=bin_path)
+headless_ida2 = HeadlessIda(ida_dir=ida_dir_path, binary_path=bin_path_2)
+
+print("-----")
+if remote_fn := headless_ida.remoteify(ida_remote_get_all_func_names):
+    all_funcs = remote_fn()
+    print(all_funcs)
+
+print("-----")
+if remote_fn2 := headless_ida2.remoteify(ida_remote_get_all_func_names):
+    all_funcs2 = remote_fn2()
+    print(all_funcs2)
+```
+
 # Advanced Usage
 ## Remote Server
 

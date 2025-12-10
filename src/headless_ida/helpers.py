@@ -3,19 +3,55 @@ import os
 import platform
 import sys
 from enum import Enum, auto
+from pathlib import Path
+from typing import Optional, Tuple, Union, Dict, Any, List
+import threading
+import socket
+from contextlib import closing
 
 import rpyc
 
 
+
 class ForwardIO(rpyc.Service):
-    def exposed_stdout_write(self, data):
+    """
+    A remote procedure call (RPC) service for forwarding I/O streams.
+
+    This class extends rpyc.Service to provide remote methods for writing to
+    stdout and stderr. It allows a client connected via rpyc to send output
+    that will be displayed on the server's standard output and error streams.
+
+    Methods:
+        exposed_stdout_write: Write data to standard output.
+        exposed_stderr_write: Write data to standard error.
+    """
+    def exposed_stdout_write(self, data: Any):
         print(data, end="", file=sys.stdout)
 
-    def exposed_stderr_write(self, data):
+    def exposed_stderr_write(self, data: Any):
         print(data, end="", file=sys.stderr)
 
 
-def escape_path(path):
+# Port allocation lock to ensure thread-safe port finding
+PortAllocLock = threading.Lock()
+
+def find_free_port() -> int:
+    """
+    Find a free port on localhost.
+    **Needs to be locked externally to ensure thread-safety.**
+    
+    Returns:
+        int: A free port number.
+    """
+    # with _port_allocation_lock:
+    with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+        s.bind(('localhost', 0))
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        return s.getsockname()[1]
+        
+        
+def escape_path(path: Union[str, Path]) -> str:
+    path = str(path)
     if os.name == "nt":
         _GetShortPathName = ctypes.windll.kernel32.GetShortPathNameW
         _GetShortPathName.argtypes = [ctypes.c_wchar_p, ctypes.c_wchar_p, ctypes.c_uint]
@@ -31,12 +67,48 @@ def escape_path(path):
 
 
 class IDABackendType(Enum):
+    """Enumeration of IDA backend types."""
     IDA = auto()
     IDAT = auto()
     IDALIB = auto()
 
 
-def resolve_ida_path(path, bits=64):
+def resolve_ida_path(path: Union[str, Path], bits:int=64) -> Tuple[IDABackendType, str]:
+    """
+    Resolve the IDA installation path and determine the backend type.
+    
+    This function identifies the appropriate IDA binary (idalib, ida, or idat) 
+    from a given file or directory path. It supports Windows, Linux, and macOS 
+    platforms and handles both 32-bit and 64-bit variants.
+    
+    Args:
+        path (Union[str, Path]): A file path to an IDA binary or a directory 
+                                  containing IDA binaries.
+        bits (int, optional): The architecture bit version (32 or 64). Defaults to 64.
+                             Used when searching in a directory to prioritize 
+                             the appropriate binary variant.
+    
+    Returns:
+        Tuple[IDABackendType, str]: A tuple containing:
+            - IDABackendType: The type of IDA backend found (IDALIB, IDA, or IDAT)
+            - str: The absolute path to the resolved IDA binary
+    
+    Raises:
+        ValueError: If the platform is unsupported or the IDA path is invalid 
+                   (file not found or no valid IDA binary found in directory)
+    
+    Raises:
+        ValueError: If the specified path does not exist or does not contain 
+                   any recognized IDA binaries.
+    
+    Examples:
+        >>> backend_type, ida_path = resolve_ida_path("/opt/ida")
+        >>> backend_type
+        <IDABackendType.IDAT: ...>
+        >>> ida_path
+        '/opt/ida/idat64'
+    """
+    path = str(path)
     IDA_BINARIES = {
         "Windows": {
             "idalib": ["idalib64.dll", "idalib.dll"],

@@ -6,6 +6,30 @@ from . import HeadlessIda, HeadlessIdaRemote, HeadlessIdaServer
 
 
 def headlessida_cli():
+    """
+    Command-line interface for HeadlessIDA.
+    
+    Parses command-line arguments to initialize a HeadlessIDA instance (local or remote)
+    and execute optional scripts or commands against a binary file.
+    
+    Arguments:
+        idat_path (str): Path to IDA Pro TUI executable or Host:Port of remote HeadlessIDA server
+        binary_path (str): Path to the binary file to analyze
+        script_path (str, optional): Path to a Python script to execute
+        -f, --ftype (str, optional): File type prefix for interpreting the input file
+        -p, --processor (str, optional): Processor type (e.g., arm:ARMv6, mips:R3000)
+        -c, --command (str, optional): Python command to execute after script
+    
+    Returns:
+        None
+    
+    Behavior:
+        - If idat_path contains ":", initializes a remote HeadlessIDA connection
+        - Otherwise, initializes a local HeadlessIDA instance
+        - Executes script_path if provided
+        - Executes command if provided via -c flag
+        - If neither script nor command is provided, launches interactive interpreter
+    """
     parser = argparse.ArgumentParser(description='Headless IDA')
     parser.add_argument(
         'idat_path', help='Path to IDA Pro TUI executable / Host:Port of remote HeadlessIDA server')
@@ -38,6 +62,21 @@ def headlessida_cli():
 
 
 def headlessida_server_cli():
+    """
+    CLI entry point for starting the Headless IDA Server.
+
+    Parses command-line arguments for IDA Pro TUI executable path, host, and port,
+    then initializes and starts a threaded RPC server that exposes HeadlessIdaServer
+    functionality with all attributes allowed.
+
+    Command-line Arguments:
+        idat_path (str): Path to IDA Pro TUI executable.
+        host (str): Host address to bind the server to.
+        port (int): Port number to listen on.
+
+    Raises:
+        SystemExit: If required arguments are missing or port is not a valid integer.
+    """
     parser = argparse.ArgumentParser(description='Headless IDA Server')
     parser.add_argument('idat_path', help='Path to IDA Pro TUI executable')
     parser.add_argument('host', help='Host to bind to')
